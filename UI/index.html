@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SteamG</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            background: #1b2838;
+            color: #c6d4df;
+            min-height: 100vh;
+            padding: 2rem;
+        }
+
+        header { text-align: center; margin-bottom: 2rem; }
+        header h1 { font-size: 2.5rem; color: #66c0f4; }
+
+        .search-bar {
+            display: flex;
+            justify-content: center;
+            gap: 0.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .search-bar input {
+            width: 320px;
+            padding: 0.6rem 1rem;
+            border-radius: 4px;
+            border: 1px solid #4a6a8a;
+            background: #2a3f5f;
+            color: #c6d4df;
+            font-size: 1rem;
+        }
+
+        .search-bar input::placeholder { color: #7a9ab5; }
+
+        .search-bar button {
+            padding: 0.6rem 1.2rem;
+            border-radius: 4px;
+            border: none;
+            background: #4a90d9;
+            color: #fff;
+            font-size: 1rem;
+            cursor: pointer;
+        }
+
+        .search-bar button:hover { background: #66c0f4; }
+
+        #status {
+            text-align: center;
+            margin-bottom: 1rem;
+            color: #7a9ab5;
+            min-height: 1.5rem;
+        }
+
+        #status.error { color: #e05b5b; }
+
+        #game-count {
+            text-align: center;
+            margin-bottom: 1.5rem;
+            font-size: 0.95rem;
+            color: #7a9ab5;
+        }
+
+        .games-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 1rem;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .game-card {
+            background: #2a3f5f;
+            border-radius: 6px;
+            overflow: hidden;
+            transition: transform 0.15s, box-shadow 0.15s;
+        }
+
+        .game-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 6px 16px rgba(0,0,0,0.4);
+        }
+
+        .game-card img {
+            width: 100%;
+            height: 94px;
+            object-fit: cover;
+            display: block;
+            background: #1b2838;
+        }
+
+        .game-card .info { padding: 0.6rem 0.75rem; }
+
+        .game-card .name {
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: #c6d4df;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .game-card .playtime {
+            font-size: 0.75rem;
+            color: #7a9ab5;
+            margin-top: 0.25rem;
+        }
+    </style>
+</head>
+<body>
+
+<header>
+    <h1>SteamG</h1>
+</header>
+
+<div class="search-bar">
+    <input type="text" id="steam-id-input" placeholder="Steam ID, username, or profile URL" />
+    <button onclick="loadGames()">Load Games</button>
+</div>
+
+<div id="status"></div>
+<div id="game-count"></div>
+
+<div class="games-grid" id="games-grid"></div>
+
+<script>
+    async function loadGames() {
+        const input = document.getElementById('steam-id-input').value.trim();
+        const status = document.getElementById('status');
+        const count = document.getElementById('game-count');
+        const grid = document.getElementById('games-grid');
+
+        if (!input) {
+            setStatus('Please enter a Steam ID.', true);
+            return;
+        }
+
+        grid.innerHTML = '';
+        count.textContent = '';
+        setStatus('Loading games...');
+
+        try {
+            const res = await fetch('/get-games', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ steam_id: input })
+            });
+
+            const data = await res.json();
+
+            if (!res.ok || data.error) {
+                setStatus(data.error || 'Failed to load games.', true);
+                return;
+            }
+
+            const games = data.games || [];
+            setStatus('');
+            count.textContent = `${games.length} games found`;
+            renderGames(games);
+
+        } catch (err) {
+            setStatus('Network error: ' + err.message, true);
+        }
+    }
+
+    function renderGames(games) {
+        const grid = document.getElementById('games-grid');
+        games.sort((a, b) => b.playtime_forever - a.playtime_forever);
+
+        games.forEach(game => {
+            const card = document.createElement('div');
+            card.className = 'game-card';
+
+            const imgUrl = game.img_logo_url
+                ? `https://media.steampowered.com/steamcommunity/public/images/apps/${game.appid}/${game.img_logo_url}.jpg`
+                : `https://cdn.cloudflare.steamstatic.com/steam/apps/${game.appid}/header.jpg`;
+
+            const hours = (game.playtime_forever / 60).toFixed(1);
+
+            card.innerHTML = `
+                <img src="${imgUrl}" alt="${game.name}" onerror="this.style.display='none'">
+                <div class="info">
+                    <div class="name" title="${game.name}">${game.name}</div>
+                    <div class="playtime">${hours} hrs played</div>
+                </div>
+            `;
+            grid.appendChild(card);
+        });
+    }
+
+    function setStatus(msg, isError = false) {
+        const el = document.getElementById('status');
+        el.textContent = msg;
+        el.className = isError ? 'error' : '';
+    }
+
+    document.getElementById('steam-id-input')
+        .addEventListener('keydown', e => { if (e.key === 'Enter') loadGames(); });
+</script>
+
+</body>
+</html>
