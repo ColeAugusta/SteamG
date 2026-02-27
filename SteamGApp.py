@@ -3,6 +3,7 @@ import requests
 import json
 import re
 import os
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dotenv import load_dotenv
 from steam_web_api import Steam
 
@@ -17,11 +18,6 @@ def index():
 
 
 def resolve_steam_id(raw):
-    """
-    Accepts a 17-digit Steam ID, a steamcommunity.com profile URL,
-    or a vanity username. Returns the resolved 64-bit Steam ID string,
-    or raises ValueError if it cannot be resolved.
-    """
     raw = raw.strip().rstrip('/')
 
     for prefix in [
@@ -96,6 +92,40 @@ def get_games():
         return jsonify({'error': str(e)}), 404
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+
+def _fetch_genres_for_app(appid):
+    """Fetch genre names for a single appid from the Steam Store API."""
+    try:
+        details = steam.apps.get_app_details(appid, filters='genres')
+        # get_app_details returns the full response dict keyed by appid
+        app_data = details.get(str(appid), {}) if details else {}
+        if not app_data.get('success'):
+            return appid, []
+        genres = app_data.get('data', {}).get('genres', [])
+        return appid, [g['description'] for g in genres]
+    except Exception:
+        return appid, []
+
+
+@app.route('/get-genres', methods=['POST'])
+def get_genres():
+    data = request.json
+    appids = (data or {}).get('appids', [])
+
+    if not appids or not isinstance(appids, list):
+        return jsonify({'error': 'appids list required'}), 400
+
+    appids = appids[:50]  # hard cap
+
+    result = {}
+    with ThreadPoolExecutor(max_workers=10) as executor:
+        futures = {executor.submit(_fetch_genres_for_app, aid): aid for aid in appids}
+        for future in as_completed(futures):
+            appid, genres = future.result()
+            result[str(appid)] = genres
+
+    return jsonify({'genres': result})
 
 
 if __name__ == "__main__":
