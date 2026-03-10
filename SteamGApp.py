@@ -1,7 +1,5 @@
 from flask import Flask, request, redirect, session, render_template, jsonify
 import requests
-import json
-import re
 import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dotenv import load_dotenv
@@ -11,7 +9,6 @@ load_dotenv()
 app = Flask(__name__, template_folder="UI")
 steam = Steam(os.getenv('API_KEY'))
 
-
 @app.route('/')
 def index():
     return render_template('index.html')
@@ -19,7 +16,6 @@ def index():
 
 def resolve_steam_id(raw):
     raw = raw.strip().rstrip('/')
-
     for prefix in [
         'https://steamcommunity.com/profiles/',
         'http://steamcommunity.com/profiles/',
@@ -28,7 +24,6 @@ def resolve_steam_id(raw):
         if raw.startswith(prefix):
             raw = raw[len(prefix):]
             break
-
     for prefix in [
         'https://steamcommunity.com/id/',
         'http://steamcommunity.com/id/',
@@ -41,7 +36,6 @@ def resolve_steam_id(raw):
     # already a 64-bit Steam ID
     if raw.isdigit() and len(raw) == 17:
         return raw
-
     # treat as vanity username
     api_key = os.getenv('API_KEY')
     resp = requests.get(
@@ -95,7 +89,6 @@ def get_games():
 
 
 def _fetch_genres_for_app(appid):
-    """Fetch genre names for a single appid from the Steam Store API."""
     try:
         details = steam.apps.get_app_details(appid, filters='genres')
         # get_app_details returns the full response dict keyed by appid
@@ -116,9 +109,12 @@ def get_genres():
     if not appids or not isinstance(appids, list):
         return jsonify({'error': 'appids list required'}), 400
 
-    appids = appids[:50]  # hard cap
+    # top 50 games
+    appids = appids[:50]
 
     result = {}
+    # using concurrent api calls to get genres for all games
+    # at once, so that it doesn't take forever
     with ThreadPoolExecutor(max_workers=10) as executor:
         futures = {executor.submit(_fetch_genres_for_app, aid): aid for aid in appids}
         for future in as_completed(futures):

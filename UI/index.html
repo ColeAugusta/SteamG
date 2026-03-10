@@ -179,10 +179,10 @@
 
 <script src="https://d3js.org/d3.v7.min.js"></script>
 <script>
+
+    // Building graph from games with D3 graph framework
+
     let simulation = null;
-
-    // ── helpers ──────────────────────────────────────────────────────────────
-
     function nodeRadius(playtimeMinutes) {
         const hrs = playtimeMinutes / 60;
         return Math.max(8, Math.min(40, 4 + Math.log1p(hrs) * 5));
@@ -194,7 +194,6 @@
         el.className = isError ? 'error' : '';
     }
 
-    // ── main load ─────────────────────────────────────────────────────────────
 
     async function loadGames() {
         const input = document.getElementById('steam-id-input').value.trim();
