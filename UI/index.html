@@ -183,9 +183,12 @@
     // Building graph from games with D3 graph framework
 
     let simulation = null;
-    function nodeRadius(playtimeMinutes) {
+    // Returns {nw, nh} for the 2:3 portrait card (library_600x900 aspect ratio).
+    // sqrt scaling so high-hour games are visibly larger without extreme outliers dominating.
+    function nodeSize(playtimeMinutes) {
         const hrs = playtimeMinutes / 60;
-        return Math.max(8, Math.min(40, 4 + Math.log1p(hrs) * 5));
+        const h = Math.max(60, Math.min(180, 26 + Math.sqrt(hrs) * 8));
+        return { nw: Math.round(h * 2 / 3), nh: Math.round(h) };
     }
 
     function setStatus(msg, isError = false) {
@@ -288,14 +291,17 @@
         }
 
         // ── nodes ─────────────────────────────────────────────────────────────
-        const nodes = games.map(g => ({
-            id: g.appid,
-            name: g.name,
-            playtime: g.playtime_forever,
-            genres: genreMap[String(g.appid)] || [],
-            radius: nodeRadius(g.playtime_forever),
-            color: nodeColor(g.appid)
-        }));
+        const nodes = games.map(g => {
+            const { nw, nh } = nodeSize(g.playtime_forever);
+            return {
+                id: g.appid,
+                name: g.name,
+                playtime: g.playtime_forever,
+                genres: genreMap[String(g.appid)] || [],
+                nw, nh,
+                color: nodeColor(g.appid)
+            };
+        });
 
         const nodeById = new Map(nodes.map(n => [n.id, n]));
 
@@ -332,6 +338,17 @@
                 .on('zoom', e => g.attr('transform', e.transform))
         );
 
+        // ── clip-paths for rounded-rect image masking ─────────────────────────
+        const defs = svg.append('defs');
+        nodes.forEach(d => {
+            defs.append('clipPath')
+                .attr('id', `clip-${d.id}`)
+                .append('rect')
+                .attr('x', -d.nw / 2).attr('y', -d.nh / 2)
+                .attr('width', d.nw).attr('height', d.nh)
+                .attr('rx', 6).attr('ry', 6);
+        });
+
         // ── draw edges ────────────────────────────────────────────────────────
         const link = g.append('g')
             .selectAll('line')
@@ -345,18 +362,13 @@
         const tooltip = document.getElementById('tooltip');
 
         const node = g.append('g')
-            .selectAll('circle')
+            .selectAll('g.node')
             .data(nodes)
-            .join('circle')
-            .attr('r', d => d.radius)
-            .attr('fill', d => d.color)
-            .attr('fill-opacity', 0.85)
-            .attr('stroke', d => d3.color(d.color) ? d3.color(d.color).brighter(0.6) : '#fff')
-            .attr('stroke-width', 1)
+            .join('g')
+            .attr('class', 'node')
             .style('cursor', 'pointer')
             .on('mouseover', function(event, d) {
-                // dim all others
-                node.attr('fill-opacity', n => n === d ? 1 : 0.15);
+                node.attr('opacity', n => n === d ? 1 : 0.15);
                 link.attr('stroke-opacity', l =>
                     (l.source === d || l.target === d) ? 0.8 : 0.05
                 );
@@ -379,7 +391,7 @@
                 tooltip.style.top = y + 'px';
             })
             .on('mouseout', function() {
-                node.attr('fill-opacity', 0.85);
+                node.attr('opacity', 1);
                 link.attr('stroke-opacity', 0.35);
                 tooltip.style.opacity = '0';
             })
@@ -399,12 +411,51 @@
                     })
             );
 
+        // Background rect (genre color fallback + border)
+        node.append('rect')
+            .attr('x', d => -d.nw / 2).attr('y', d => -d.nh / 2)
+            .attr('width', d => d.nw).attr('height', d => d.nh)
+            .attr('rx', 6).attr('ry', 6)
+            .attr('fill', d => d.color)
+            .attr('stroke', d => d3.color(d.color) ? d3.color(d.color).brighter(0.8) : '#fff')
+            .attr('stroke-width', 2);
+
+        // Game cover image filling the card (library_600x900 matches 2:3 card exactly)
+        node.append('image')
+            .attr('href', d => `https://cdn.cloudflare.steamstatic.com/steam/apps/${d.id}/library_600x900.jpg`)
+            .attr('x', d => -d.nw / 2).attr('y', d => -d.nh / 2)
+            .attr('width', d => d.nw).attr('height', d => d.nh)
+            .attr('preserveAspectRatio', 'xMidYMid slice')
+            .attr('clip-path', d => `url(#clip-${d.id})`);
+
+        // ── no-genre cluster label ────────────────────────────────────────────
+        const hasGenreData = Object.keys(genreMap).length > 0;
+        const clusterX = W * 0.12;
+        const clusterY = H * 0.88;
+        const noGenreCount = nodes.filter(n => n.genres.length === 0).length;
+
+        if (hasGenreData && noGenreCount > 0) {
+            g.append('text')
+                .attr('x', clusterX)
+                .attr('y', clusterY - 70)
+                .attr('text-anchor', 'middle')
+                .attr('fill', '#4a6a8a')
+                .attr('font-size', '11px')
+                .attr('pointer-events', 'none')
+                .text('No genre data');
+        }
+
         // ── simulation ────────────────────────────────────────────────────────
+
         simulation = d3.forceSimulation(nodes)
-            .force('link', d3.forceLink(edges).id(d => d.id).distance(80).strength(0.3))
-            .force('charge', d3.forceManyBody().strength(-120))
+            .force('link', d3.forceLink(edges).id(d => d.id).distance(160).strength(0.3))
+            .force('charge', d3.forceManyBody().strength(-500))
             .force('center', d3.forceCenter(W / 2, H / 2))
-            .force('collide', d3.forceCollide(d => d.radius + 3).iterations(2))
+            .force('collide', d3.forceCollide(d => Math.sqrt(d.nw * d.nw + d.nh * d.nh) / 2 + 14).iterations(3))
+            .force('noGenreX', d3.forceX(d => hasGenreData && d.genres.length === 0 ? clusterX : W / 2)
+                .strength(d => hasGenreData && d.genres.length === 0 ? 0.18 : 0))
+            .force('noGenreY', d3.forceY(d => hasGenreData && d.genres.length === 0 ? clusterY : H / 2)
+                .strength(d => hasGenreData && d.genres.length === 0 ? 0.18 : 0))
             .alphaDecay(0.025)
             .on('tick', () => {
                 link
@@ -413,8 +464,7 @@
                     .attr('x2', d => d.target.x)
                     .attr('y2', d => d.target.y);
                 node
-                    .attr('cx', d => d.x)
-                    .attr('cy', d => d.y);
+                    .attr('transform', d => `translate(${d.x},${d.y})`);
             });
 
         // ── legend ────────────────────────────────────────────────────────────
