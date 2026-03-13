@@ -447,15 +447,47 @@
 
         // ── simulation ────────────────────────────────────────────────────────
 
+        // Spread top genres evenly in a circle around the canvas center.
+        // Each node is pulled toward its primary genre's target point.
+        const genrePositions = {};
+        topGenres.forEach((genre, i) => {
+            const angle = (i / topGenres.length) * 2 * Math.PI - Math.PI / 2;
+            const r = Math.min(W, H) * 0.33;
+            genrePositions[genre] = {
+                x: W / 2 + r * Math.cos(angle),
+                y: H / 2 + r * Math.sin(angle)
+            };
+        });
+
+        // Primary genre = first non-ubiquitous genre that has a cluster position.
+        function primaryGenre(d) {
+            for (const g of d.genres) {
+                if (genrePositions[g] && !ubiquitous.has(g)) return g;
+            }
+            return null;
+        }
+
         simulation = d3.forceSimulation(nodes)
-            .force('link', d3.forceLink(edges).id(d => d.id).distance(160).strength(0.3))
-            .force('charge', d3.forceManyBody().strength(-500))
-            .force('center', d3.forceCenter(W / 2, H / 2))
+            .force('link', d3.forceLink(edges).id(d => d.id).distance(130).strength(0.5))
+            .force('charge', d3.forceManyBody().strength(-350))
+            .force('center', d3.forceCenter(W / 2, H / 2).strength(0.04))
             .force('collide', d3.forceCollide(d => Math.sqrt(d.nw * d.nw + d.nh * d.nh) / 2 + 14).iterations(3))
-            .force('noGenreX', d3.forceX(d => hasGenreData && d.genres.length === 0 ? clusterX : W / 2)
-                .strength(d => hasGenreData && d.genres.length === 0 ? 0.18 : 0))
-            .force('noGenreY', d3.forceY(d => hasGenreData && d.genres.length === 0 ? clusterY : H / 2)
-                .strength(d => hasGenreData && d.genres.length === 0 ? 0.18 : 0))
+            .force('clusterX', d3.forceX(d => {
+                if (hasGenreData && d.genres.length === 0) return clusterX;
+                const pg = primaryGenre(d);
+                return pg ? genrePositions[pg].x : W / 2;
+            }).strength(d => {
+                if (hasGenreData && d.genres.length === 0) return 0.2;
+                return primaryGenre(d) ? 0.12 : 0;
+            }))
+            .force('clusterY', d3.forceY(d => {
+                if (hasGenreData && d.genres.length === 0) return clusterY;
+                const pg = primaryGenre(d);
+                return pg ? genrePositions[pg].y : H / 2;
+            }).strength(d => {
+                if (hasGenreData && d.genres.length === 0) return 0.2;
+                return primaryGenre(d) ? 0.12 : 0;
+            }))
             .alphaDecay(0.025)
             .on('tick', () => {
                 link
