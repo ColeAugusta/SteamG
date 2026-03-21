@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 from steam_web_api import Steam
 
 load_dotenv()
-app = Flask(__name__, template_folder="UI")
+app = Flask(__name__, template_folder="UI", static_folder="UI")
 steam = Steam(os.getenv('API_KEY'))
 
 @app.route('/')
@@ -122,6 +122,47 @@ def get_genres():
             result[str(appid)] = genres
 
     return jsonify({'genres': result})
+
+
+def _fetch_tags_for_app(appid):
+    try:
+        resp = requests.get(
+            'https://store.steampowered.com/api/appdetails',
+            params={'appids': appid, 'filters': 'tags'},
+            timeout=10
+        )
+        resp.raise_for_status()
+        app_data = resp.json().get(str(appid), {})
+        if not app_data.get('success'):
+            return appid, []
+        tags = app_data.get('data', {}).get('tags', {})
+        if isinstance(tags, dict):
+            # tags is {name: vote_count}, sort by votes descending, take top 8
+            sorted_tags = sorted(tags.items(), key=lambda x: x[1], reverse=True)
+            return appid, [t[0] for t in sorted_tags[:8]]
+        return appid, []
+    except Exception:
+        return appid, []
+
+
+@app.route('/get-tags', methods=['POST'])
+def get_tags():
+    data = request.json
+    appids = (data or {}).get('appids', [])
+
+    if not appids or not isinstance(appids, list):
+        return jsonify({'error': 'appids list required'}), 400
+
+    appids = appids[:50]
+
+    result = {}
+    with ThreadPoolExecutor(max_workers=10) as executor:
+        futures = {executor.submit(_fetch_tags_for_app, aid): aid for aid in appids}
+        for future in as_completed(futures):
+            appid, tags = future.result()
+            result[str(appid)] = tags
+
+    return jsonify({'tags': result})
 
 
 if __name__ == "__main__":

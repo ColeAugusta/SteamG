@@ -1,0 +1,147 @@
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+    font-family: 'Segoe UI', sans-serif;
+    background: #1b2838;
+    color: #c6d4df;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+header { text-align: center; padding: 1rem 1rem 0.5rem; }
+header h1 { font-size: 2rem; color: #66c0f4; }
+
+.controls {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+}
+
+.controls input {
+    width: 320px;
+    padding: 0.6rem 1rem;
+    border-radius: 4px;
+    border: 1px solid #4a6a8a;
+    background: #2a3f5f;
+    color: #c6d4df;
+    font-size: 1rem;
+}
+
+.controls input::placeholder { color: #7a9ab5; }
+
+.controls button {
+    padding: 0.6rem 1.2rem;
+    border-radius: 4px;
+    border: none;
+    background: #4a90d9;
+    color: #fff;
+    font-size: 1rem;
+    cursor: pointer;
+}
+
+.controls button:hover { background: #66c0f4; }
+
+#status {
+    text-align: center;
+    color: #7a9ab5;
+    font-size: 0.875rem;
+    min-height: 1.25rem;
+    padding: 0 1rem 0.4rem;
+}
+
+#status.error { color: #e05b5b; }
+
+#graph-container {
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+}
+
+#graph-container svg {
+    width: 100%;
+    height: 100%;
+    display: block;
+}
+
+/* Tooltip */
+#tooltip {
+    position: absolute;
+    background: rgba(17, 28, 42, 0.96);
+    border: 1px solid #4a6a8a;
+    border-radius: 6px;
+    padding: 0.6rem 0.85rem;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.12s;
+    max-width: 220px;
+    z-index: 20;
+}
+
+#tooltip .t-name {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: #c6d4df;
+    margin-bottom: 0.2rem;
+}
+
+#tooltip .t-hours {
+    font-size: 0.8rem;
+    color: #66c0f4;
+    margin-bottom: 0.25rem;
+}
+
+#tooltip .t-genres {
+    font-size: 0.75rem;
+    color: #7a9ab5;
+    line-height: 1.4;
+}
+
+/* Legend */
+#legend {
+    position: absolute;
+    bottom: 1rem;
+    left: 1rem;
+    background: rgba(17, 28, 42, 0.9);
+    border: 1px solid #4a6a8a;
+    border-radius: 6px;
+    padding: 0.7rem 0.9rem;
+    font-size: 0.78rem;
+    display: none;
+    max-width: 180px;
+}
+
+#legend h4 {
+    color: #66c0f4;
+    font-size: 0.8rem;
+    margin-bottom: 0.4rem;
+}
+
+.legend-item {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    margin-bottom: 0.2rem;
+    color: #c6d4df;
+}
+
+.legend-dot {
+    width: 11px;
+    height: 11px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+/* Hint */
+#hint {
+    position: absolute;
+    bottom: 1rem;
+    right: 1rem;
+    color: #3e5a75;
+    font-size: 0.72rem;
+    text-align: right;
+    line-height: 1.6;
+}
