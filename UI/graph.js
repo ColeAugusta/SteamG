@@ -266,22 +266,11 @@
             .attr('preserveAspectRatio', 'xMidYMid slice')
             .attr('clip-path', d => `url(#clip-${d.id})`);
 
-        // ── no-genre cluster label ────────────────────────────────────────────
+        // ── no-genre cluster setup ────────────────────────────────────────────
         const hasData = Object.keys(dataMap).length > 0;
         const clusterX = W * 0.12;
         const clusterY = H * 0.88;
         const noDataCount = nodes.filter(n => n.labels.length === 0).length;
-
-        if (hasData && noDataCount > 0) {
-            g.append('text')
-                .attr('x', clusterX)
-                .attr('y', clusterY - 70)
-                .attr('text-anchor', 'middle')
-                .attr('fill', '#4a6a8a')
-                .attr('font-size', '11px')
-                .attr('pointer-events', 'none')
-                .text(`No ${dataLabel.toLowerCase()} data`);
-        }
 
         // ── simulation ────────────────────────────────────────────────────────
 
@@ -290,12 +279,38 @@
         const genrePositions = {};
         topGenres.forEach((genre, i) => {
             const angle = (i / topGenres.length) * 2 * Math.PI - Math.PI / 2;
-            const r = Math.min(W, H) * 0.33;
+            const r = Math.min(W, H) * 0.22;
             genrePositions[genre] = {
                 x: W / 2 + r * Math.cos(angle),
                 y: H / 2 + r * Math.sin(angle)
             };
         });
+
+        // ── cluster labels ─────────────────────────────────────────────────────
+        topGenres.forEach(genre => {
+            g.append('text')
+                .attr('x', genrePositions[genre].x)
+                .attr('y', genrePositions[genre].y)
+                .attr('text-anchor', 'middle')
+                .attr('fill', colorScale(genre))
+                .attr('font-size', '14px')
+                .attr('font-weight', 'bold')
+                .attr('pointer-events', 'none')
+                .attr('opacity', 0.8)
+                .text(genre);
+        });
+        if (hasData && noDataCount > 0) {
+            g.append('text')
+                .attr('x', clusterX)
+                .attr('y', clusterY - 70)
+                .attr('text-anchor', 'middle')
+                .attr('fill', FALLBACK_COLOR)
+                .attr('font-size', '14px')
+                .attr('font-weight', 'bold')
+                .attr('pointer-events', 'none')
+                .attr('opacity', 0.8)
+                .text(`No ${dataLabel.toLowerCase()} data`);
+        }
 
         // Primary label = first non-ubiquitous label that has a cluster position.
         function primaryGenre(d) {
@@ -306,8 +321,8 @@
         }
 
         simulation = d3.forceSimulation(nodes)
-            .force('link', d3.forceLink(edges).id(d => d.id).distance(130).strength(0.5))
-            .force('charge', d3.forceManyBody().strength(-350))
+            .force('link', d3.forceLink(edges).id(d => d.id).distance(200).strength(0.5))
+            .force('charge', d3.forceManyBody().strength(-700))
             .force('center', d3.forceCenter(W / 2, H / 2).strength(0.04))
             .force('collide', d3.forceCollide(d => Math.sqrt(d.nw * d.nw + d.nh * d.nh) / 2 + 14).iterations(3))
             .force('clusterX', d3.forceX(d => {
@@ -315,16 +330,16 @@
                 const pg = primaryGenre(d);
                 return pg ? genrePositions[pg].x : W / 2;
             }).strength(d => {
-                if (hasData && d.labels.length === 0) return 0.2;
-                return primaryGenre(d) ? 0.12 : 0;
+                if (hasData && d.labels.length === 0) return 0.25;
+                return primaryGenre(d) ? 0.25 : 0;
             }))
             .force('clusterY', d3.forceY(d => {
                 if (hasData && d.labels.length === 0) return clusterY;
                 const pg = primaryGenre(d);
                 return pg ? genrePositions[pg].y : H / 2;
             }).strength(d => {
-                if (hasData && d.labels.length === 0) return 0.2;
-                return primaryGenre(d) ? 0.12 : 0;
+                if (hasData && d.labels.length === 0) return 0.25;
+                return primaryGenre(d) ? 0.25 : 0;
             }))
             .alphaDecay(0.025)
             .on('tick', () => {

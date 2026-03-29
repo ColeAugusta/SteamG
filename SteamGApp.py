@@ -88,15 +88,22 @@ def get_games():
         return jsonify({'error': str(e)}), 500
 
 
+def _fetch_steamspy(appid):
+    resp = requests.get(
+        'https://steamspy.com/api.php',
+        params={'request': 'appdetails', 'appid': appid},
+        timeout=10
+    )
+    resp.raise_for_status()
+    return resp.json()
+
+
 def _fetch_genres_for_app(appid):
     try:
-        details = steam.apps.get_app_details(appid, filters='genres')
-        # get_app_details returns the full response dict keyed by appid
-        app_data = details.get(str(appid), {}) if details else {}
-        if not app_data.get('success'):
-            return appid, []
-        genres = app_data.get('data', {}).get('genres', [])
-        return appid, [g['description'] for g in genres]
+        data = _fetch_steamspy(appid)
+        genre_str = data.get('genre', '') or ''
+        genres = [g.strip() for g in genre_str.split(',') if g.strip()]
+        return appid, genres
     except Exception:
         return appid, []
 
@@ -115,7 +122,7 @@ def get_genres():
     result = {}
     # using concurrent api calls to get genres for all games
     # at once, so that it doesn't take forever
-    with ThreadPoolExecutor(max_workers=10) as executor:
+    with ThreadPoolExecutor(max_workers=5) as executor:
         futures = {executor.submit(_fetch_genres_for_app, aid): aid for aid in appids}
         for future in as_completed(futures):
             appid, genres = future.result()
@@ -126,18 +133,9 @@ def get_genres():
 
 def _fetch_tags_for_app(appid):
     try:
-        resp = requests.get(
-            'https://store.steampowered.com/api/appdetails',
-            params={'appids': appid, 'filters': 'tags'},
-            timeout=10
-        )
-        resp.raise_for_status()
-        app_data = resp.json().get(str(appid), {})
-        if not app_data.get('success'):
-            return appid, []
-        tags = app_data.get('data', {}).get('tags', {})
+        data = _fetch_steamspy(appid)
+        tags = data.get('tags') or {}
         if isinstance(tags, dict):
-            # tags is {name: vote_count}, sort by votes descending, take top 8
             sorted_tags = sorted(tags.items(), key=lambda x: x[1], reverse=True)
             return appid, [t[0] for t in sorted_tags[:8]]
         return appid, []
@@ -156,7 +154,7 @@ def get_tags():
     appids = appids[:50]
 
     result = {}
-    with ThreadPoolExecutor(max_workers=10) as executor:
+    with ThreadPoolExecutor(max_workers=5) as executor:
         futures = {executor.submit(_fetch_tags_for_app, aid): aid for aid in appids}
         for future in as_completed(futures):
             appid, tags = future.result()
