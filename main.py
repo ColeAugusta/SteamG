@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 from steam_web_api import Steam
 
 load_dotenv()
-app = Flask(__name__, template_folder="UI", static_folder="UI")
+app = Flask(__name__, template_folder="UI/src", static_folder="UI/src")
 steam = Steam(os.getenv('API_KEY'))
 
 @app.route('/')
@@ -121,7 +121,6 @@ def get_genres():
 
     result = {}
     # using concurrent api calls to get genres for all games
-    # at once, so that it doesn't take forever
     with ThreadPoolExecutor(max_workers=5) as executor:
         futures = {executor.submit(_fetch_genres_for_app, aid): aid for aid in appids}
         for future in as_completed(futures):
@@ -154,6 +153,7 @@ def get_tags():
     appids = appids[:50]
 
     result = {}
+    # using concurrent api calls to get tags for all games
     with ThreadPoolExecutor(max_workers=5) as executor:
         futures = {executor.submit(_fetch_tags_for_app, aid): aid for aid in appids}
         for future in as_completed(futures):

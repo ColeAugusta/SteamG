@@ -1,16 +1,17 @@
-    // Building graph from games with D3 graph framework
-
+    // build graph from games with D3 graph framework
     let simulation = null;
     let currentGames = null;
     let currentGenreMap = {};
     let currentTagMap = null;
-    // Returns {nw, nh} for the 2:3 portrait card (library_600x900 aspect ratio).
-    // sqrt scaling so high-hour games are visibly larger without extreme outliers dominating.
+    
+    // returns {nw, nh} for the 2:3 portrait card (library_600x900 aspect ratio).
+    // sqrt scaling so high-hour games are visibly larger
     function nodeSize(playtimeMinutes) {
         const hrs = playtimeMinutes / 60;
         const h = Math.max(60, Math.min(180, 26 + Math.sqrt(hrs) * 8));
         return { nw: Math.round(h * 2 / 3), nh: Math.round(h) };
     }
+
 
     function setStatus(msg, isError = false) {
         const el = document.getElementById('status');
@@ -51,15 +52,14 @@
 
         if (games.length === 0) { setStatus('No games found (profile may be private).', true); return; }
 
-        // Sort by playtime so top-N for genre fetch are the most-played
+        // top-N for genre fetch are the most-played
         games.sort((a, b) => b.playtime_forever - a.playtime_forever);
 
         setStatus(`${games.length} games found — fetching genre data for top 50…`);
 
-        // Render nodes immediately (no edges yet)
+        // render nodes immediately (no edges yet)
         renderGraph(games, {}, 'Genre');
 
-        // Fetch genres for top 50
         const top50 = games.slice(0, 50).map(g => g.appid);
         let genreMap = {};
         try {
@@ -72,7 +72,7 @@
             genreMap = data.genres || {};
         } catch (_) { /* genre fetch failed, graph still works without edges */ }
 
-        // Re-render with edges
+        // re-render with edges
         if (simulation) simulation.stop();
         d3.select('#graph-container svg').remove();
         currentGames = games;
@@ -81,28 +81,26 @@
         document.getElementById('group-by').disabled = false;
     }
 
-    // ── graph ─────────────────────────────────────────────────────────────────
 
     function renderGraph(games, dataMap, dataLabel = 'Genre') {
         const container = document.getElementById('graph-container');
         const W = container.clientWidth;
         const H = container.clientHeight;
 
-        // ── build color scale ─────────────────────────────────────────────────
+        // build color scale
         const labelCount = {};
         Object.values(dataMap).forEach(labels => {
             labels.forEach(l => { labelCount[l] = (labelCount[l] || 0) + 1; });
         });
         const totalFetched = Object.keys(dataMap).length || 1;
 
-        // Mark labels that appear in >40% of fetched games as ubiquitous (skip for edges)
+        // marks labels that appear in >40% of fetched games as ubiquitous (skip for edges)
         const ubiquitous = new Set(
             Object.entries(labelCount)
                 .filter(([, c]) => c / totalFetched > 0.4)
                 .map(([g]) => g)
         );
 
-        // Top 10 labels by frequency → assign Tableau10 colors
         const topGenres = Object.entries(labelCount)
             .sort((a, b) => b[1] - a[1])
             .slice(0, 10)
@@ -119,7 +117,6 @@
             return FALLBACK_COLOR;
         }
 
-        // ── nodes ─────────────────────────────────────────────────────────────
         const nodes = games.map(g => {
             const { nw, nh } = nodeSize(g.playtime_forever);
             return {
@@ -134,8 +131,7 @@
 
         const nodeById = new Map(nodes.map(n => [n.id, n]));
 
-        // ── edges ─────────────────────────────────────────────────────────────
-        // Genre/tag edges: games sharing a non-ubiquitous label
+        // genre/tag edges: games sharing a non-ubiquitous label
         const edges = [];
         const appidsWithData = Object.keys(dataMap).map(Number);
 
@@ -152,7 +148,7 @@
             }
         }
 
-        // No-data edges: connect all no-label nodes via a star so they cluster together
+        // connect all no-label nodes via a star so they cluster together
         const noDataNodes = nodes.filter(n => n.labels.length === 0);
         if (noDataNodes.length > 1) {
             const hub = noDataNodes[0];
@@ -166,7 +162,6 @@
 
         setStatus(`${gameCount} games · ${edgeCount} genre connections`);
 
-        // ── SVG setup ─────────────────────────────────────────────────────────
         const svg = d3.select('#graph-container').append('svg');
         const g = svg.append('g');
 
@@ -176,7 +171,7 @@
                 .on('zoom', e => g.attr('transform', e.transform))
         );
 
-        // ── clip-paths for rounded-rect image masking ─────────────────────────
+        // clip-paths for rounded-rect image masking 
         const defs = svg.append('defs');
         nodes.forEach(d => {
             defs.append('clipPath')
@@ -187,7 +182,7 @@
                 .attr('rx', 6).attr('ry', 6);
         });
 
-        // ── draw edges ────────────────────────────────────────────────────────
+        // draw edges/nodes
         const link = g.append('g')
             .selectAll('line')
             .data(edges)
@@ -196,7 +191,6 @@
             .attr('stroke-opacity', 0.35)
             .attr('stroke-width', d => Math.min(d.weight, 3));
 
-        // ── draw nodes ────────────────────────────────────────────────────────
         const tooltip = document.getElementById('tooltip');
 
         const node = g.append('g')
@@ -249,7 +243,7 @@
                     })
             );
 
-        // Background rect (genre color fallback + border)
+        // genre color fallback + border
         node.append('rect')
             .attr('x', d => -d.nw / 2).attr('y', d => -d.nh / 2)
             .attr('width', d => d.nw).attr('height', d => d.nh)
@@ -258,7 +252,7 @@
             .attr('stroke', d => d3.color(d.color) ? d3.color(d.color).brighter(0.8) : '#fff')
             .attr('stroke-width', 2);
 
-        // Game cover image filling the card (library_600x900 matches 2:3 card exactly)
+        // game cover image fills the card
         node.append('image')
             .attr('href', d => `https://cdn.cloudflare.steamstatic.com/steam/apps/${d.id}/library_600x900.jpg`)
             .attr('x', d => -d.nw / 2).attr('y', d => -d.nh / 2)
@@ -266,16 +260,16 @@
             .attr('preserveAspectRatio', 'xMidYMid slice')
             .attr('clip-path', d => `url(#clip-${d.id})`);
 
-        // ── no-genre cluster setup ────────────────────────────────────────────
+        // no-genre cluster setup
         const hasData = Object.keys(dataMap).length > 0;
         const clusterX = W * 0.12;
         const clusterY = H * 0.88;
         const noDataCount = nodes.filter(n => n.labels.length === 0).length;
 
-        // ── simulation ────────────────────────────────────────────────────────
+        // simulation 
 
-        // Spread top genres evenly in a circle around the canvas center.
-        // Each node is pulled toward its primary genre's target point.
+        // spread top genres evenly in a circle around the canvas center.
+        // each node is pulled toward its primary genre's target point.
         const genrePositions = {};
         topGenres.forEach((genre, i) => {
             const angle = (i / topGenres.length) * 2 * Math.PI - Math.PI / 2;
@@ -286,7 +280,7 @@
             };
         });
 
-        // ── cluster labels ─────────────────────────────────────────────────────
+        // cluster labels 
         topGenres.forEach(genre => {
             g.append('text')
                 .attr('x', genrePositions[genre].x)
@@ -312,7 +306,7 @@
                 .text(`No ${dataLabel.toLowerCase()} data`);
         }
 
-        // Primary label = first non-ubiquitous label that has a cluster position.
+        // primary label = first non-ubiquitous label that has a cluster position
         function primaryGenre(d) {
             for (const g of d.labels) {
                 if (genrePositions[g] && !ubiquitous.has(g)) return g;
@@ -352,8 +346,8 @@
                     .attr('transform', d => `translate(${d.x},${d.y})`);
             });
 
-        // ── legend ────────────────────────────────────────────────────────────
-        const legendEl = document.getElementById('legend');
+
+            const legendEl = document.getElementById('legend');
         legendEl.innerHTML = `<h4>${dataLabel}</h4>`;
 
         topGenres.forEach(genre => {
