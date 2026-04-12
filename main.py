@@ -1,12 +1,13 @@
 from flask import Flask, request, redirect, session, render_template, jsonify
 import requests
 import os
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dotenv import load_dotenv
 from steam_web_api import Steam
 
 load_dotenv()
-app = Flask(__name__, template_folder="UI/src", static_folder="UI/src")
+app = Flask(__name__, template_folder="UI/src", static_folder="UI")
 steam = Steam(os.getenv('API_KEY'))
 
 @app.route('/')
@@ -89,13 +90,18 @@ def get_games():
 
 
 def _fetch_steamspy(appid):
-    resp = requests.get(
-        'https://steamspy.com/api.php',
-        params={'request': 'appdetails', 'appid': appid},
-        timeout=10
-    )
-    resp.raise_for_status()
-    return resp.json()
+    for attempt in range(4):
+        resp = requests.get(
+            'https://steamspy.com/api.php',
+            params={'request': 'appdetails', 'appid': appid},
+            timeout=10
+        )
+        if resp.status_code == 429:
+            time.sleep(2 ** attempt)
+            continue
+        resp.raise_for_status()
+        return resp.json()
+    raise Exception(f'rate limited for appid {appid}')
 
 
 def _fetch_genres_for_app(appid):
@@ -116,12 +122,10 @@ def get_genres():
     if not appids or not isinstance(appids, list):
         return jsonify({'error': 'appids list required'}), 400
 
-    # top 50 games
-    appids = appids[:50]
+    appids = appids[:200]
 
     result = {}
-    # using concurrent api calls to get genres for all games
-    with ThreadPoolExecutor(max_workers=5) as executor:
+    with ThreadPoolExecutor(max_workers=3) as executor:
         futures = {executor.submit(_fetch_genres_for_app, aid): aid for aid in appids}
         for future in as_completed(futures):
             appid, genres = future.result()
@@ -150,11 +154,10 @@ def get_tags():
     if not appids or not isinstance(appids, list):
         return jsonify({'error': 'appids list required'}), 400
 
-    appids = appids[:50]
+    appids = appids[:200]
 
     result = {}
-    # using concurrent api calls to get tags for all games
-    with ThreadPoolExecutor(max_workers=5) as executor:
+    with ThreadPoolExecutor(max_workers=3) as executor:
         futures = {executor.submit(_fetch_tags_for_app, aid): aid for aid in appids}
         for future in as_completed(futures):
             appid, tags = future.result()

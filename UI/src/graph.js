@@ -8,7 +8,7 @@
     // sqrt scaling so high-hour games are visibly larger
     function nodeSize(playtimeMinutes) {
         const hrs = playtimeMinutes / 60;
-        const h = Math.max(60, Math.min(180, 26 + Math.sqrt(hrs) * 8));
+        const h = Math.max(90, Math.min(270, 40 + Math.sqrt(hrs) * 12));
         return { nw: Math.round(h * 2 / 3), nh: Math.round(h) };
     }
 
@@ -55,12 +55,13 @@
         // top-N for genre fetch are the most-played
         games.sort((a, b) => b.playtime_forever - a.playtime_forever);
 
-        setStatus(`${games.length} games found — fetching genre data for top 50…`);
+        const fetchCount = Math.min(games.length, 200);
+        setStatus(`${games.length} games found — fetching genre data for top ${fetchCount}…`);
 
         // render nodes immediately (no edges yet)
         renderGraph(games, {}, 'Genre');
 
-        const top50 = games.slice(0, 50).map(g => g.appid);
+        const top50 = games.slice(0, fetchCount).map(g => g.appid);
         let genreMap = {};
         try {
             const res = await fetch('/get-genres', {
@@ -280,32 +281,6 @@
             };
         });
 
-        // cluster labels 
-        topGenres.forEach(genre => {
-            g.append('text')
-                .attr('x', genrePositions[genre].x)
-                .attr('y', genrePositions[genre].y)
-                .attr('text-anchor', 'middle')
-                .attr('fill', colorScale(genre))
-                .attr('font-size', '14px')
-                .attr('font-weight', 'bold')
-                .attr('pointer-events', 'none')
-                .attr('opacity', 0.8)
-                .text(genre);
-        });
-        if (hasData && noDataCount > 0) {
-            g.append('text')
-                .attr('x', clusterX)
-                .attr('y', clusterY - 70)
-                .attr('text-anchor', 'middle')
-                .attr('fill', FALLBACK_COLOR)
-                .attr('font-size', '14px')
-                .attr('font-weight', 'bold')
-                .attr('pointer-events', 'none')
-                .attr('opacity', 0.8)
-                .text(`No ${dataLabel.toLowerCase()} data`);
-        }
-
         // primary label = first non-ubiquitous label that has a cluster position
         function primaryGenre(d) {
             for (const g of d.labels) {
@@ -381,7 +356,7 @@
         } else {
             if (!currentTagMap) {
                 setStatus('Fetching tag data…');
-                const top50 = currentGames.slice(0, 50).map(g => g.appid);
+                const top50 = currentGames.slice(0, 200).map(g => g.appid);
                 try {
                     const res = await fetch('/get-tags', {
                         method: 'POST',
